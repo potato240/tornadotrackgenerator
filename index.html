@@ -2,317 +2,81 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Fictional Hollywood Tornado — EF4</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<title>Tornado Track Generator</title>
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, Helvetica, Arial, sans-serif; }
-  #header {
+  body {
+    margin: 0;
     background: #1a1a2e;
     color: #fff;
-    padding: 10px 14px;
-    text-align: center;
-  }
-  #header h1 { font-size: 16px; margin: 0 0 2px 0; }
-  #header .sub { font-size: 11px; color: #aaa; }
-  #map { height: calc(100% - 56px); width: 100%; }
-  #controls {
-    position: absolute;
-    bottom: 18px;
-    left: 12px;
-    right: 12px;
-    z-index: 1000;
+    font-family: -apple-system, Helvetica, Arial, sans-serif;
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 16px;
   }
-  #controls button {
-    background: #1a1a2e;
-    color: #fff;
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: #aaa; font-size: 13px; margin-bottom: 28px; text-align: center; }
+  .list {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  a.card {
+    display: block;
+    background: #0f1229;
     border: 1px solid #ff2b2b;
-    padding: 10px 14px;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: 6px;
-    cursor: pointer;
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: #fff;
+    text-decoration: none;
   }
-  #funBtn { border-color: #3fa9f5 !important; }
-  #joystickBase {
-    position: absolute;
-    bottom: 90px;
-    right: 30px;
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    background: rgba(26,26,46,0.55);
-    border: 2px solid #3fa9f5;
-    z-index: 1000;
-    display: none;
-    touch-action: none;
-  }
-  #joystickKnob {
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 50px; height: 50px;
-    margin: -25px 0 0 -25px;
-    border-radius: 50%;
-    background: #3fa9f5;
-    border: 2px solid #fff;
-  }
+  a.card:active { opacity: 0.8; }
+  a.card .title { font-weight: 600; font-size: 15px; margin-bottom: 3px; }
+  a.card .desc { font-size: 12px; color: #bbb; }
 </style>
 </head>
 <body>
-<div id="header">
-  <h1>Fictional Hollywood, CA Tornado — Peak EF4</h1>
-  <div class="sub">Test scenario — not a real event (tornadoes are very rare in the LA basin)</div>
-</div>
-<div id="map"></div>
-<div id="controls">
-  <button id="followBtn">▶ Animate & Follow</button>
-  <button id="pauseBtn">⏸ Pause</button>
-  <button id="restartBtn">⟲ Restart</button>
-  <button id="funBtn">🎮 Fun Mode</button>
-</div>
-<div id="joystickBase"><div id="joystickKnob"></div></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script>
-  const track = [
-    { lat: 34.0928, lon: -118.3287, name: "Touchdown — West Hollywood, CA", time: "2:14 PM", ef: "EF1", widthM: 200 },
-    { lat: 34.0983, lon: -118.3267, name: "Sunset Blvd / Hollywood Hills edge", time: "2:17 PM", ef: "EF2", widthM: 500 },
-    { lat: 34.1016, lon: -118.3267, name: "Hollywood Sign area (peak)",    time: "2:20 PM", ef: "EF4", widthM: 900 },
-    { lat: 34.1069, lon: -118.3240, name: "Griffith Park edge",             time: "2:24 PM", ef: "EF3", widthM: 600 },
-    { lat: 34.1141, lon: -118.3040, name: "Dissipates — Los Feliz, CA",     time: "2:29 PM", ef: "EF1", widthM: 250 }
-  ];
-
-  const map = L.map('map').setView([34.105, -118.32], 13);
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 18
-  }).addTo(map);
-
-  const latlngs = track.map(p => [p.lat, p.lon]);
-  L.polyline(latlngs, { color: '#ff0000', weight: 2, dashArray: '6 4', opacity: 0.9 }).addTo(map);
-
-  function destPoint(lat, lon, bearingDeg, distM) {
-    const R = 6371000;
-    const brng = bearingDeg * Math.PI / 180;
-    const lat1 = lat * Math.PI / 180;
-    const lon1 = lon * Math.PI / 180;
-    const lat2 = Math.asin(Math.sin(lat1)*Math.cos(distM/R) + Math.cos(lat1)*Math.sin(distM/R)*Math.cos(brng));
-    const lon2 = lon1 + Math.atan2(Math.sin(brng)*Math.sin(distM/R)*Math.cos(lat1), Math.cos(distM/R)-Math.sin(lat1)*Math.sin(lat2));
-    return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
-  }
-  function bearing(lat1, lon1, lat2, lon2) {
-    const y = Math.sin((lon2-lon1)*Math.PI/180) * Math.cos(lat2*Math.PI/180);
-    const x = Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180) -
-              Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos((lon2-lon1)*Math.PI/180);
-    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-  }
-
-  const leftSide = [];
-  const rightSide = [];
-  for (let i = 0; i < track.length; i++) {
-    const p = track[i];
-    let brg;
-    if (i === 0) brg = bearing(track[0].lat, track[0].lon, track[1].lat, track[1].lon);
-    else if (i === track.length - 1) brg = bearing(track[i-1].lat, track[i-1].lon, track[i].lat, track[i].lon);
-    else {
-      const b1 = bearing(track[i-1].lat, track[i-1].lon, p.lat, p.lon);
-      const b2 = bearing(p.lat, p.lon, track[i+1].lat, track[i+1].lon);
-      brg = (b1 + b2) / 2;
-    }
-    const half = p.widthM / 2;
-    leftSide.push(destPoint(p.lat, p.lon, brg - 90, half));
-    rightSide.push(destPoint(p.lat, p.lon, brg + 90, half));
-  }
-  const swath = leftSide.concat(rightSide.reverse());
-  L.polygon(swath, { color: '#ff0000', weight: 1, fillColor: '#ff0000', fillOpacity: 0.35 }).addTo(map);
-
-  track.forEach(p => {
-    L.circleMarker([p.lat, p.lon], { radius: 5, color: '#fff', fillColor: '#1a1a2e', fillOpacity: 1, weight: 2 })
-      .addTo(map)
-      .bindPopup(`<b>${p.name}</b><br>${p.time} &middot; ${p.ef}<br>Width: ${p.widthM} m`);
-  });
-
-  map.fitBounds(swath, { padding: [30, 30] });
-
-  function interpolate(a, b, t) {
-    return [a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t];
-  }
-
-  const animDot = L.circleMarker(latlngs[0], {
-    radius: 5, color: '#fff', weight: 2, fillColor: '#ff2b2b', fillOpacity: 1
-  }).addTo(map);
-
-  const widths = track.map(p => p.widthM);
-
-  function haversine(lat1, lon1, lat2, lon2) {
-    const R = 6371000;
-    const dLat = (lat2-lat1) * Math.PI/180;
-    const dLon = (lon2-lon1) * Math.PI/180;
-    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  }
-  const segDistances = [];
-  for (let i = 0; i < latlngs.length - 1; i++) {
-    segDistances.push(haversine(latlngs[i][0], latlngs[i][1], latlngs[i+1][0], latlngs[i+1][1]));
-  }
-  const totalDistance = segDistances.reduce((a,b) => a+b, 0);
-  const cumulativeDistance = [0];
-  segDistances.forEach(d => cumulativeDistance.push(cumulativeDistance[cumulativeDistance.length-1] + d));
-
-  function getPositionAtFraction(frac) {
-    const targetDist = frac * totalDistance;
-    let segIdx = 0;
-    while (segIdx < segDistances.length - 1 && cumulativeDistance[segIdx + 1] < targetDist) segIdx++;
-    const segStart = cumulativeDistance[segIdx];
-    const segLen = segDistances[segIdx] || 1;
-    const segT = Math.min(1, Math.max(0, (targetDist - segStart) / segLen));
-    return { segIdx, segT };
-  }
-
-  function widthToRadiusPx(widthM, lat) {
-    const metersPerPixel = 156543.03392 * Math.abs(Math.cos(lat * Math.PI / 180)) / Math.pow(2, map.getZoom());
-    const px = (widthM / 2) / metersPerPixel;
-    return Math.max(3, px);
-  }
-
-  const durationMsDefault = 20000;
-  const durationMsFollow = 40000;
-  const followZoom = 14;
-  let followMode = false;
-  let durationMs = durationMsDefault;
-  let isPaused = false;
-  let elapsed = 0;
-  let lastFrameTs = null;
-
-  function animate(ts) {
-    if (lastFrameTs === null) lastFrameTs = ts;
-    const dt = ts - lastFrameTs;
-    lastFrameTs = ts;
-
-    if (funMode) {
-      funModeStep(dt);
-      requestAnimationFrame(animate);
-      return;
-    }
-
-    if (!isPaused) elapsed += dt;
-
-    const t = (elapsed % durationMs) / durationMs;
-    const { segIdx, segT } = getPositionAtFraction(t);
-    const pos = interpolate(latlngs[segIdx], latlngs[segIdx + 1], segT);
-    const currentWidthM = widths[segIdx] + (widths[segIdx + 1] - widths[segIdx]) * segT;
-    animDot.setLatLng(pos);
-    animDot.setRadius(widthToRadiusPx(currentWidthM, pos[0]));
-    if (followMode) {
-      map.setView(pos, followZoom, { animate: false });
-    }
-    requestAnimationFrame(animate);
-  }
-  requestAnimationFrame(animate);
-
-  const followBtn = document.getElementById('followBtn');
-  followBtn.addEventListener('click', () => {
-    followMode = !followMode;
-    if (followMode) {
-      durationMs = durationMsFollow;
-      followBtn.textContent = '■ Stop Following';
-    } else {
-      durationMs = durationMsDefault;
-      followBtn.textContent = '▶ Animate & Follow';
-      map.fitBounds(swath, { padding: [30, 30] });
-    }
-  });
-
-  const pauseBtn = document.getElementById('pauseBtn');
-  pauseBtn.addEventListener('click', () => {
-    isPaused = !isPaused;
-    pauseBtn.textContent = isPaused ? '▶ Resume' : '⏸ Pause';
-  });
-
-  const restartBtn = document.getElementById('restartBtn');
-  restartBtn.addEventListener('click', () => {
-    elapsed = 0;
-  });
-
-  // --- Fun Mode: joystick-controlled free movement ---
-  let funMode = false;
-  let joyActive = false;
-  let joyDx = 0, joyDy = 0; // normalized -1..1
-  let freePos = latlngs[0].slice();
-
-  const funBtn = document.getElementById('funBtn');
-  const joystickBase = document.getElementById('joystickBase');
-  const joystickKnob = document.getElementById('joystickKnob');
-
-  funBtn.addEventListener('click', () => {
-    funMode = !funMode;
-    if (funMode) {
-      followMode = false;
-      followBtn.textContent = '▶ Animate & Follow';
-      freePos = animDot.getLatLng ? [animDot.getLatLng().lat, animDot.getLatLng().lng] : latlngs[0].slice();
-      joystickBase.style.display = 'block';
-      funBtn.textContent = '🎮 Exit Fun Mode';
-    } else {
-      joystickBase.style.display = 'none';
-      joyActive = false;
-      joyDx = 0; joyDy = 0;
-      joystickKnob.style.transform = 'translate(0px, 0px)';
-      funBtn.textContent = '🎮 Fun Mode';
-    }
-  });
-
-  function updateJoystickFromEvent(clientX, clientY) {
-    const rect = joystickBase.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    let dx = clientX - cx;
-    let dy = clientY - cy;
-    const maxR = rect.width / 2;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist > maxR) {
-      dx = dx / dist * maxR;
-      dy = dy / dist * maxR;
-    }
-    joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-    joyDx = dx / maxR;
-    joyDy = dy / maxR;
-  }
-
-  function resetJoystick() {
-    joyActive = false;
-    joyDx = 0; joyDy = 0;
-    joystickKnob.style.transform = 'translate(0px, 0px)';
-  }
-
-  joystickBase.addEventListener('pointerdown', (e) => {
-    joyActive = true;
-    updateJoystickFromEvent(e.clientX, e.clientY);
-    joystickBase.setPointerCapture(e.pointerId);
-  });
-  joystickBase.addEventListener('pointermove', (e) => {
-    if (joyActive) updateJoystickFromEvent(e.clientX, e.clientY);
-  });
-  joystickBase.addEventListener('pointerup', resetJoystick);
-  joystickBase.addEventListener('pointercancel', resetJoystick);
-
-  const funSpeedMPerSec = 3000; // how fast the dot moves in fun mode, metres/sec at full deflection
-  function funModeStep(dtMs) {
-    if (!funMode || (joyDx === 0 && joyDy === 0)) return;
-    const distM = funSpeedMPerSec * (dtMs / 1000);
-    const moveBearing = (Math.atan2(joyDx, -joyDy) * 180 / Math.PI + 360) % 360;
-    const moveDist = distM * Math.min(1, Math.sqrt(joyDx*joyDx + joyDy*joyDy));
-    const newPos = destPoint(freePos[0], freePos[1], moveBearing, moveDist);
-    freePos = newPos;
-    animDot.setLatLng(freePos);
-    animDot.setRadius(widthToRadiusPx(1500, freePos[0])); // fixed nominal width while free-roaming
-    if (followMode === false) {
-      // keep it in view while driving around
-      map.panTo(freePos, { animate: false });
-    }
-  }
-</script>
+  <h1>Tornado Track Generator</h1>
+  <div class="sub">Fictional tornado scenarios — none of these are real events</div>
+  <div class="list">
+    <a class="card" href="logan.html">
+      <div class="title">Logan, QLD</div>
+      <div class="desc">EF1–EF2, short local track near home</div>
+    </a>
+    <a class="card" href="boston.html">
+      <div class="title">Boston, MA</div>
+      <div class="desc">Peak EF4, Framingham → Newton → Boston</div>
+    </a>
+    <a class="card" href="tanner.html">
+      <div class="title">Tanner, AL</div>
+      <div class="desc">Peak EF5, Belgreen → Tanner → New Hope</div>
+    </a>
+    <a class="card" href="joplin-3mile.html">
+      <div class="title">Joplin, MO — 3 mi wide</div>
+      <div class="desc">EF4, exaggerated width straight through central Joplin</div>
+    </a>
+    <a class="card" href="joplin-longtrack.html">
+      <div class="title">Joplin, MO — long track</div>
+      <div class="desc">EF4, ~140 mile track from Vinita, OK to Golden City, MO</div>
+    </a>
+    <a class="card" href="crosscountry-16day.html">
+      <div class="title">16-Day Cross-Country</div>
+      <div class="desc">Peak EF5, 1 mile wide, Denver to Boston</div>
+    </a>
+    <a class="card" href="tristate-27mile.html">
+      <div class="title">Long-Lived Tri-State</div>
+      <div class="desc">Peak EF5, 27 mi wide, follows the real 1925 route</div>
+    </a>
+    <a class="card" href="oklahoma-joke.html">
+      <div class="title">Oklahoma (joke rating)</div>
+      <div class="desc">Off-scale joke EF rating, clearly labelled as not real</div>
+    </a>
+    <a class="card" href="hollywood.html">
+      <div class="title">Hollywood, CA</div>
+      <div class="desc">Peak EF4, includes Fun Mode joystick control</div>
+    </a>
+  </div>
 </body>
 </html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fictional Boston Tornado Path — EF4</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, Helvetica, Arial, sans-serif; }
+  #header {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 10px 14px;
+    text-align: center;
+  }
+  #header h1 { font-size: 16px; margin: 0 0 2px 0; }
+  #header .sub { font-size: 11px; color: #aaa; }
+  #map { height: calc(100% - 56px); width: 100%; }
+</style>
+</head>
+<body>
+<div id="header">
+  <h1>Fictional Boston-Area Tornado Path — Peak EF4</h1>
+  <div class="sub">Test scenario — not a real event · width shown to scale (metres)</div>
+</div>
+<div id="map"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+  const track = [
+    { lat: 42.2793, lon: -71.4162, name: "Touchdown — Framingham", time: "4:10 PM", ef: "EF1", widthM: 100 },
+    { lat: 42.2836, lon: -71.3495, name: "Natick", time: "4:17 PM", ef: "EF3", widthM: 400 },
+    { lat: 42.2968, lon: -71.2924, name: "Wellesley (intensifying)", time: "4:23 PM", ef: "EF4", widthM: 750 },
+    { lat: 42.3370, lon: -71.2092, name: "Newton (peak intensity)", time: "4:31 PM", ef: "EF4", widthM: 800 },
+    { lat: 42.3505, lon: -71.1256, name: "Dissipates — Brighton/Allston, Boston", time: "4:39 PM", ef: "EF1", widthM: 150 }
+  ];
+
+  const map = L.map('map').setView([42.31, -71.27], 11);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 17
+  }).addTo(map);
+
+  const latlngs = track.map(p => [p.lat, p.lon]);
+  L.polyline(latlngs, { color: '#ff0000', weight: 2, dashArray: '6 4', opacity: 0.9 }).addTo(map);
+
+  function destPoint(lat, lon, bearingDeg, distM) {
+    const R = 6371000;
+    const brng = bearingDeg * Math.PI / 180;
+    const lat1 = lat * Math.PI / 180;
+    const lon1 = lon * Math.PI / 180;
+    const lat2 = Math.asin(Math.sin(lat1)*Math.cos(distM/R) + Math.cos(lat1)*Math.sin(distM/R)*Math.cos(brng));
+    const lon2 = lon1 + Math.atan2(Math.sin(brng)*Math.sin(distM/R)*Math.cos(lat1), Math.cos(distM/R)-Math.sin(lat1)*Math.sin(lat2));
+    return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
+  }
+  function bearing(lat1, lon1, lat2, lon2) {
+    const y = Math.sin((lon2-lon1)*Math.PI/180) * Math.cos(lat2*Math.PI/180);
+    const x = Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180) -
+              Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos((lon2-lon1)*Math.PI/180);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+
+  const leftSide = [];
+  const rightSide = [];
+  for (let i = 0; i < track.length; i++) {
+    const p = track[i];
+    let brg;
+    if (i === 0) brg = bearing(track[0].lat, track[0].lon, track[1].lat, track[1].lon);
+    else if (i === track.length - 1) brg = bearing(track[i-1].lat, track[i-1].lon, track[i].lat, track[i].lon);
+    else {
+      const b1 = bearing(track[i-1].lat, track[i-1].lon, p.lat, p.lon);
+      const b2 = bearing(p.lat, p.lon, track[i+1].lat, track[i+1].lon);
+      brg = (b1 + b2) / 2;
+    }
+    const half = p.widthM / 2;
+    leftSide.push(destPoint(p.lat, p.lon, brg - 90, half));
+    rightSide.push(destPoint(p.lat, p.lon, brg + 90, half));
+  }
+  const swath = leftSide.concat(rightSide.reverse());
+  L.polygon(swath, { color: '#ff0000', weight: 1, fillColor: '#ff0000', fillOpacity: 0.35 }).addTo(map);
+
+  track.forEach(p => {
+    L.circleMarker([p.lat, p.lon], { radius: 5, color: '#fff', fillColor: '#1a1a2e', fillOpacity: 1, weight: 2 })
+      .addTo(map)
+      .bindPopup(`<b>${p.name}</b><br>${p.time} &middot; ${p.ef}<br>Width: ${p.widthM} m`);
+  });
+
+  map.fitBounds(swath, { padding: [30, 30] });
+</script>
+</body>
+</html>
