@@ -15,6 +15,49 @@
   #header h1 { font-size: 16px; margin: 0 0 2px 0; }
   #header .sub { font-size: 11px; color: #aaa; }
   #map { height: calc(100% - 56px); width: 100%; }
+  #controls {
+    position: absolute;
+    bottom: 18px;
+    left: 12px;
+    right: 12px;
+    z-index: 1000;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  #controls button {
+    background: #1a1a2e;
+    color: #fff;
+    border: 1px solid #ff2b2b;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  #funBtn { border-color: #3fa9f5 !important; }
+  #joystickBase {
+    position: absolute;
+    bottom: 90px;
+    right: 30px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(26,26,46,0.55);
+    border: 2px solid #3fa9f5;
+    z-index: 1000;
+    display: none;
+    touch-action: none;
+  }
+  #joystickKnob {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 50px; height: 50px;
+    margin: -25px 0 0 -25px;
+    border-radius: 50%;
+    background: #3fa9f5;
+    border: 2px solid #fff;
+  }
 </style>
 </head>
 <body>
@@ -23,6 +66,13 @@
   <div class="sub">Test scenario — not a real event · width shown to scale (metres)</div>
 </div>
 <div id="map"></div>
+<div id="controls">
+  <button id="followBtn">▶ Animate & Follow</button>
+  <button id="pauseBtn">⏸ Pause</button>
+  <button id="restartBtn">⟲ Restart</button>
+  <button id="funBtn">🎮 Fun Mode</button>
+</div>
+<div id="joystickBase"><div id="joystickKnob"></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -38,7 +88,7 @@
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 17
+    maxZoom: 18
   }).addTo(map);
 
   const latlngs = track.map(p => [p.lat, p.lon]);
@@ -86,6 +136,182 @@
   });
 
   map.fitBounds(swath, { padding: [30, 30] });
+
+  function interpolate(a, b, t) {
+    return [a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t];
+  }
+
+  const animDot = L.circleMarker(latlngs[0], {
+    radius: 5, color: '#fff', weight: 2, fillColor: '#ff2b2b', fillOpacity: 1
+  }).addTo(map);
+
+  const widths = track.map(p => p.widthM);
+
+  function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2-lat1) * Math.PI/180;
+    const dLon = (lon2-lon1) * Math.PI/180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+  const segDistances = [];
+  for (let i = 0; i < latlngs.length - 1; i++) {
+    segDistances.push(haversine(latlngs[i][0], latlngs[i][1], latlngs[i+1][0], latlngs[i+1][1]));
+  }
+  const totalDistance = segDistances.reduce((a,b) => a+b, 0);
+  const cumulativeDistance = [0];
+  segDistances.forEach(d => cumulativeDistance.push(cumulativeDistance[cumulativeDistance.length-1] + d));
+
+  function getPositionAtFraction(frac) {
+    const targetDist = frac * totalDistance;
+    let segIdx = 0;
+    while (segIdx < segDistances.length - 1 && cumulativeDistance[segIdx + 1] < targetDist) segIdx++;
+    const segStart = cumulativeDistance[segIdx];
+    const segLen = segDistances[segIdx] || 1;
+    const segT = Math.min(1, Math.max(0, (targetDist - segStart) / segLen));
+    return { segIdx, segT };
+  }
+
+  function widthToRadiusPx(widthM, lat) {
+    const metersPerPixel = 156543.03392 * Math.abs(Math.cos(lat * Math.PI / 180)) / Math.pow(2, map.getZoom());
+    const px = (widthM / 2) / metersPerPixel;
+    return Math.max(3, px);
+  }
+
+  const durationMsDefault = 20000;
+  const durationMsFollow = 40000;
+  const followZoom = 14;
+  let followMode = false;
+  let durationMs = durationMsDefault;
+  let isPaused = false;
+  let elapsed = 0;
+  let lastFrameTs = null;
+
+  function animate(ts) {
+    if (lastFrameTs === null) lastFrameTs = ts;
+    const dt = ts - lastFrameTs;
+    lastFrameTs = ts;
+
+    if (funMode) {
+      funModeStep(dt);
+      requestAnimationFrame(animate);
+      return;
+    }
+
+    if (!isPaused) elapsed += dt;
+
+    const t = (elapsed % durationMs) / durationMs;
+    const { segIdx, segT } = getPositionAtFraction(t);
+    const pos = interpolate(latlngs[segIdx], latlngs[segIdx + 1], segT);
+    const currentWidthM = widths[segIdx] + (widths[segIdx + 1] - widths[segIdx]) * segT;
+    animDot.setLatLng(pos);
+    animDot.setRadius(widthToRadiusPx(currentWidthM, pos[0]));
+    if (followMode) {
+      map.setView(pos, followZoom, { animate: false });
+    }
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+
+  const followBtn = document.getElementById('followBtn');
+  followBtn.addEventListener('click', () => {
+    followMode = !followMode;
+    if (followMode) {
+      durationMs = durationMsFollow;
+      followBtn.textContent = '■ Stop Following';
+    } else {
+      durationMs = durationMsDefault;
+      followBtn.textContent = '▶ Animate & Follow';
+      map.fitBounds(swath, { padding: [30, 30] });
+    }
+  });
+
+  const pauseBtn = document.getElementById('pauseBtn');
+  pauseBtn.addEventListener('click', () => {
+    isPaused = !isPaused;
+    pauseBtn.textContent = isPaused ? '▶ Resume' : '⏸ Pause';
+  });
+
+  const restartBtn = document.getElementById('restartBtn');
+  restartBtn.addEventListener('click', () => {
+    elapsed = 0;
+  });
+
+  // --- Fun Mode: joystick-controlled free movement ---
+  let funMode = false;
+  let joyActive = false;
+  let joyDx = 0, joyDy = 0;
+  let freePos = latlngs[0].slice();
+
+  const funBtn = document.getElementById('funBtn');
+  const joystickBase = document.getElementById('joystickBase');
+  const joystickKnob = document.getElementById('joystickKnob');
+
+  funBtn.addEventListener('click', () => {
+    funMode = !funMode;
+    if (funMode) {
+      followMode = false;
+      followBtn.textContent = '▶ Animate & Follow';
+      freePos = [animDot.getLatLng().lat, animDot.getLatLng().lng];
+      joystickBase.style.display = 'block';
+      funBtn.textContent = '🎮 Exit Fun Mode';
+    } else {
+      joystickBase.style.display = 'none';
+      joyActive = false;
+      joyDx = 0; joyDy = 0;
+      joystickKnob.style.transform = 'translate(0px, 0px)';
+      funBtn.textContent = '🎮 Fun Mode';
+    }
+  });
+
+  function updateJoystickFromEvent(clientX, clientY) {
+    const rect = joystickBase.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let dx = clientX - cx;
+    let dy = clientY - cy;
+    const maxR = rect.width / 2;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist > maxR) {
+      dx = dx / dist * maxR;
+      dy = dy / dist * maxR;
+    }
+    joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    joyDx = dx / maxR;
+    joyDy = dy / maxR;
+  }
+
+  function resetJoystick() {
+    joyActive = false;
+    joyDx = 0; joyDy = 0;
+    joystickKnob.style.transform = 'translate(0px, 0px)';
+  }
+
+  joystickBase.addEventListener('pointerdown', (e) => {
+    joyActive = true;
+    updateJoystickFromEvent(e.clientX, e.clientY);
+    joystickBase.setPointerCapture(e.pointerId);
+  });
+  joystickBase.addEventListener('pointermove', (e) => {
+    if (joyActive) updateJoystickFromEvent(e.clientX, e.clientY);
+  });
+  joystickBase.addEventListener('pointerup', resetJoystick);
+  joystickBase.addEventListener('pointercancel', resetJoystick);
+
+  const funSpeedMPerSec = 3000;
+  function funModeStep(dtMs) {
+    if (!funMode || (joyDx === 0 && joyDy === 0)) return;
+    const distM = funSpeedMPerSec * (dtMs / 1000);
+    const moveBearing = (Math.atan2(joyDx, -joyDy) * 180 / Math.PI + 360) % 360;
+    const moveDist = distM * Math.min(1, Math.sqrt(joyDx*joyDx + joyDy*joyDy));
+    const newPos = destPoint(freePos[0], freePos[1], moveBearing, moveDist);
+    freePos = newPos;
+    animDot.setLatLng(freePos);
+    animDot.setRadius(widthToRadiusPx(1500, freePos[0]));
+    if (!followMode) {
+      map.panTo(freePos, { animate: false });
+    }
+  }
 </script>
 </body>
 </html>

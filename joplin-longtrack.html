@@ -15,80 +15,48 @@
   #header h1 { font-size: 16px; margin: 0 0 2px 0; }
   #header .sub { font-size: 11px; color: #aaa; }
   #map { height: calc(100% - 56px); width: 100%; }
-  #followBtn {
+  #controls {
     position: absolute;
     bottom: 18px;
-    left: 18px;
+    left: 12px;
+    right: 12px;
     z-index: 1000;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  #controls button {
     background: #1a1a2e;
     color: #fff;
     border: 1px solid #ff2b2b;
-    padding: 10px 16px;
+    padding: 10px 14px;
     font-size: 13px;
     font-weight: 600;
     border-radius: 6px;
     cursor: pointer;
   }
-  #followBtn:active { opacity: 0.8; }
-  #pauseBtn {
+  #funBtn { border-color: #3fa9f5 !important; }
+  #joystickBase {
     position: absolute;
-    bottom: 18px;
-    left: 168px;
+    bottom: 90px;
+    right: 30px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(26,26,46,0.55);
+    border: 2px solid #3fa9f5;
     z-index: 1000;
-    background: #1a1a2e;
-    color: #fff;
-    border: 1px solid #ff2b2b;
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: 6px;
-    cursor: pointer;
+    display: none;
+    touch-action: none;
   }
-  #pauseBtn:active { opacity: 0.8; }
-  #restartBtn {
-    position: absolute;
-    bottom: 18px;
-    left: 318px;
-    z-index: 1000;
-    background: #1a1a2e;
-    color: #fff;
-    border: 1px solid #ff2b2b;
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  #restartBtn:active { opacity: 0.8; }
-
-  .tornado-icon { position: relative; }
-  .tornado-scale {
+  #joystickKnob {
     position: absolute;
     top: 50%; left: 50%;
     width: 50px; height: 50px;
     margin: -25px 0 0 -25px;
-    transform: scale(1);
-  }
-  .tornado-spin {
-    position: absolute;
-    inset: 0;
     border-radius: 50%;
-    overflow: hidden;
-    animation: tornado-spin 1.1s linear infinite;
-  }
-  .tornado-spin svg { width: 100%; height: 100%; display: block; }
-  .tornado-glow {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    border: 2px solid #ff2b2b;
-    opacity: 0.7;
-    animation: tornado-pulse 1.4s ease-out infinite;
-  }
-  @keyframes tornado-spin { to { transform: rotate(360deg); } }
-  @keyframes tornado-pulse {
-    0%   { transform: scale(1);   opacity: 0.7; }
-    100% { transform: scale(2.2); opacity: 0; }
+    background: #3fa9f5;
+    border: 2px solid #fff;
   }
 </style>
 </head>
@@ -98,9 +66,13 @@
   <div class="sub">Test scenario — not a real event · width shown to scale (metres)</div>
 </div>
 <div id="map"></div>
-<button id="followBtn">▶ Animate & Follow</button>
-<button id="pauseBtn">⏸ Pause</button>
-<button id="restartBtn">⟲ Restart</button>
+<div id="controls">
+  <button id="followBtn">▶ Animate & Follow</button>
+  <button id="pauseBtn">⏸ Pause</button>
+  <button id="restartBtn">⟲ Restart</button>
+  <button id="funBtn">🎮 Fun Mode</button>
+</div>
+<div id="joystickBase"><div id="joystickKnob"></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -122,7 +94,7 @@
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 17
+    maxZoom: 18
   }).addTo(map);
 
   const latlngs = track.map(p => [p.lat, p.lon]);
@@ -171,60 +143,75 @@
 
   map.fitBounds(swath, { padding: [30, 30] });
 
-  // --- animated dot along the track ---
   function interpolate(a, b, t) {
     return [a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t];
   }
 
-  const animDot = L.marker(latlngs[0], {
-    icon: L.divIcon({
-      className: 'tornado-icon',
-      html: '<div class="tornado-scale"><div class="tornado-glow"></div><div class="tornado-spin"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="#ff2b2b" fill-opacity="0.65" stroke="#ff2b2b" stroke-width="3"/><line x1="82.5" y1="82.5" x2="77.0" y2="51.0" stroke="#e0402f" stroke-width="6" stroke-linecap="round"/><line x1="29.1" y1="91.0" x2="57.4" y2="76.0" stroke="#e0402f" stroke-width="6" stroke-linecap="round"/><line x1="4.6" y1="42.8" x2="27.6" y2="65.0" stroke="#e0402f" stroke-width="6" stroke-linecap="round"/><line x1="42.8" y1="4.6" x2="28.8" y2="33.3" stroke="#e0402f" stroke-width="6" stroke-linecap="round"/><line x1="91.0" y1="29.1" x2="59.3" y2="24.7" stroke="#e0402f" stroke-width="6" stroke-linecap="round"/></svg></div></div>',
-      iconSize: [50, 50],
-      iconAnchor: [25, 25]
-    }),
-    interactive: false
+  const animDot = L.circleMarker(latlngs[0], {
+    radius: 5, color: '#fff', weight: 2, fillColor: '#ff2b2b', fillOpacity: 1
   }).addTo(map);
 
   const widths = track.map(p => p.widthM);
-  // true-to-scale: convert real-world width (metres) to on-screen pixel radius
-  // based on the map's current zoom and latitude, so the dot matches the swath width
+
+  function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2-lat1) * Math.PI/180;
+    const dLon = (lon2-lon1) * Math.PI/180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+  const segDistances = [];
+  for (let i = 0; i < latlngs.length - 1; i++) {
+    segDistances.push(haversine(latlngs[i][0], latlngs[i][1], latlngs[i+1][0], latlngs[i+1][1]));
+  }
+  const totalDistance = segDistances.reduce((a,b) => a+b, 0);
+  const cumulativeDistance = [0];
+  segDistances.forEach(d => cumulativeDistance.push(cumulativeDistance[cumulativeDistance.length-1] + d));
+
+  function getPositionAtFraction(frac) {
+    const targetDist = frac * totalDistance;
+    let segIdx = 0;
+    while (segIdx < segDistances.length - 1 && cumulativeDistance[segIdx + 1] < targetDist) segIdx++;
+    const segStart = cumulativeDistance[segIdx];
+    const segLen = segDistances[segIdx] || 1;
+    const segT = Math.min(1, Math.max(0, (targetDist - segStart) / segLen));
+    return { segIdx, segT };
+  }
+
   function widthToRadiusPx(widthM, lat) {
     const metersPerPixel = 156543.03392 * Math.abs(Math.cos(lat * Math.PI / 180)) / Math.pow(2, map.getZoom());
     const px = (widthM / 2) / metersPerPixel;
     return Math.max(3, px);
   }
 
-  const durationMsDefault = 28000; // default loop time (slowed down)
-  const durationMsFollow = 60000;  // slower loop time when following
+  const durationMsDefault = 40000;
+  const durationMsFollow = 80000;
   const followZoom = 12;
   let followMode = false;
   let durationMs = durationMsDefault;
   let isPaused = false;
   let elapsed = 0;
   let lastFrameTs = null;
-  const segCount = latlngs.length - 1;
 
   function animate(ts) {
     if (lastFrameTs === null) lastFrameTs = ts;
     const dt = ts - lastFrameTs;
     lastFrameTs = ts;
+
+    if (funMode) {
+      funModeStep(dt);
+      requestAnimationFrame(animate);
+      return;
+    }
+
     if (!isPaused) elapsed += dt;
 
     const t = (elapsed % durationMs) / durationMs;
-    const segFloat = t * segCount;
-    const segIdx = Math.min(Math.floor(segFloat), segCount - 1);
-    const segT = segFloat - segIdx;
+    const { segIdx, segT } = getPositionAtFraction(t);
     const pos = interpolate(latlngs[segIdx], latlngs[segIdx + 1], segT);
     const currentWidthM = widths[segIdx] + (widths[segIdx + 1] - widths[segIdx]) * segT;
     animDot.setLatLng(pos);
-    const radiusPx = widthToRadiusPx(currentWidthM, pos[0]);
-    const scaleFactor = radiusPx / 25; // base icon half-size is 25px
-    const el = animDot.getElement();
-    if (el) {
-      const scaleEl = el.querySelector('.tornado-scale');
-      if (scaleEl) scaleEl.style.transform = `scale(${scaleFactor})`;
-    }
+    animDot.setRadius(widthToRadiusPx(currentWidthM, pos[0]));
     if (followMode) {
       map.setView(pos, followZoom, { animate: false });
     }
@@ -255,6 +242,82 @@
   restartBtn.addEventListener('click', () => {
     elapsed = 0;
   });
+
+  // --- Fun Mode: joystick-controlled free movement ---
+  let funMode = false;
+  let joyActive = false;
+  let joyDx = 0, joyDy = 0;
+  let freePos = latlngs[0].slice();
+
+  const funBtn = document.getElementById('funBtn');
+  const joystickBase = document.getElementById('joystickBase');
+  const joystickKnob = document.getElementById('joystickKnob');
+
+  funBtn.addEventListener('click', () => {
+    funMode = !funMode;
+    if (funMode) {
+      followMode = false;
+      followBtn.textContent = '▶ Animate & Follow';
+      freePos = [animDot.getLatLng().lat, animDot.getLatLng().lng];
+      joystickBase.style.display = 'block';
+      funBtn.textContent = '🎮 Exit Fun Mode';
+    } else {
+      joystickBase.style.display = 'none';
+      joyActive = false;
+      joyDx = 0; joyDy = 0;
+      joystickKnob.style.transform = 'translate(0px, 0px)';
+      funBtn.textContent = '🎮 Fun Mode';
+    }
+  });
+
+  function updateJoystickFromEvent(clientX, clientY) {
+    const rect = joystickBase.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let dx = clientX - cx;
+    let dy = clientY - cy;
+    const maxR = rect.width / 2;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist > maxR) {
+      dx = dx / dist * maxR;
+      dy = dy / dist * maxR;
+    }
+    joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    joyDx = dx / maxR;
+    joyDy = dy / maxR;
+  }
+
+  function resetJoystick() {
+    joyActive = false;
+    joyDx = 0; joyDy = 0;
+    joystickKnob.style.transform = 'translate(0px, 0px)';
+  }
+
+  joystickBase.addEventListener('pointerdown', (e) => {
+    joyActive = true;
+    updateJoystickFromEvent(e.clientX, e.clientY);
+    joystickBase.setPointerCapture(e.pointerId);
+  });
+  joystickBase.addEventListener('pointermove', (e) => {
+    if (joyActive) updateJoystickFromEvent(e.clientX, e.clientY);
+  });
+  joystickBase.addEventListener('pointerup', resetJoystick);
+  joystickBase.addEventListener('pointercancel', resetJoystick);
+
+  const funSpeedMPerSec = 3000;
+  function funModeStep(dtMs) {
+    if (!funMode || (joyDx === 0 && joyDy === 0)) return;
+    const distM = funSpeedMPerSec * (dtMs / 1000);
+    const moveBearing = (Math.atan2(joyDx, -joyDy) * 180 / Math.PI + 360) % 360;
+    const moveDist = distM * Math.min(1, Math.sqrt(joyDx*joyDx + joyDy*joyDy));
+    const newPos = destPoint(freePos[0], freePos[1], moveBearing, moveDist);
+    freePos = newPos;
+    animDot.setLatLng(freePos);
+    animDot.setRadius(widthToRadiusPx(1500, freePos[0]));
+    if (!followMode) {
+      map.panTo(freePos, { animate: false });
+    }
+  }
 </script>
 </body>
 </html>

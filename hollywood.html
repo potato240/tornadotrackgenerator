@@ -240,7 +240,7 @@
   // --- Fun Mode: joystick-controlled free movement ---
   let funMode = false;
   let joyActive = false;
-  let joyDx = 0, joyDy = 0; // normalized -1..1
+  let joyDx = 0, joyDy = 0;
   let freePos = latlngs[0].slice();
 
   const funBtn = document.getElementById('funBtn');
@@ -252,7 +252,7 @@
     if (funMode) {
       followMode = false;
       followBtn.textContent = '▶ Animate & Follow';
-      freePos = animDot.getLatLng ? [animDot.getLatLng().lat, animDot.getLatLng().lng] : latlngs[0].slice();
+      freePos = [animDot.getLatLng().lat, animDot.getLatLng().lng];
       joystickBase.style.display = 'block';
       funBtn.textContent = '🎮 Exit Fun Mode';
     } else {
@@ -298,7 +298,7 @@
   joystickBase.addEventListener('pointerup', resetJoystick);
   joystickBase.addEventListener('pointercancel', resetJoystick);
 
-  const funSpeedMPerSec = 3000; // how fast the dot moves in fun mode, metres/sec at full deflection
+  const funSpeedMPerSec = 3000;
   function funModeStep(dtMs) {
     if (!funMode || (joyDx === 0 && joyDy === 0)) return;
     const distM = funSpeedMPerSec * (dtMs / 1000);
@@ -307,9 +307,8 @@
     const newPos = destPoint(freePos[0], freePos[1], moveBearing, moveDist);
     freePos = newPos;
     animDot.setLatLng(freePos);
-    animDot.setRadius(widthToRadiusPx(1500, freePos[0])); // fixed nominal width while free-roaming
-    if (followMode === false) {
-      // keep it in view while driving around
+    animDot.setRadius(widthToRadiusPx(1500, freePos[0]));
+    if (!followMode) {
       map.panTo(freePos, { animate: false });
     }
   }
